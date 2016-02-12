@@ -112,6 +112,20 @@ public class MainActivity extends AppCompatActivity {
         ProfileManager pm = getProfileManager();
         VpnProfile profile = new VpnProfile("IdeanVPN");
         profile.mUseLzo = true;
+        //Certificate stuff
+        profile.mServerName = "67.183.127.61";
+        profile.mServerPort = "1144";
+        profile.mUseUdp = false;
+        profile.mConnectRetryMax = "5";
+        profile.mConnectRetry = "5";
+        profile.mUseDefaultRoute = true;
+        profile.mUseDefaultRoutev6 = true;
+        profile.mUsePull = true;
+
+        profile.mConnections[0].mEnabled = true;
+        profile.mConnections[0].mServerName = "67.183.127.61";
+        profile.mConnections[0].mServerPort = "1144";
+        profile.mConnections[0].mUseUdp = false;
 
         pm.addProfile(profile);
         pm.saveProfileList(this);
