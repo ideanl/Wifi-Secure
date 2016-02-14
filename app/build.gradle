@@ -17,6 +17,26 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets', 'ovpnlibs/assets']
+            jniLibs.srcDirs = ['ovpnlibs/jniLibs']
+            jni.srcDirs = [] //disable automatic ndk-build
+        }
+
+        ovpn3 {
+
+        }
+
+        debug {
+
+        }
+
+        release {
+
+        }
+    }
 }
 
 dependencies {

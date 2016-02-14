@@ -91,7 +91,7 @@ public class VpnProfile implements Serializable, Cloneable {
     // but needs to keep wrong name to guarante loading of old
     // profiles
     public transient boolean profileDeleted = false;
-    public int mAuthenticationType = TYPE_KEYSTORE;
+    public final int mAuthenticationType = 0;
     public String mName;
     public String mAlias;
     public String mClientCertFilename;
@@ -102,7 +102,7 @@ public class VpnProfile implements Serializable, Cloneable {
     public boolean mUseLzo = true;
     public String mPKCS12Filename;
     public String mPKCS12Password;
-    public boolean mUseTLSAuth = false;
+    public final boolean mUseTLSAuth = false;
 
     public String mDNS1 = DEFAULT_DNS1;
     public String mDNS2 = DEFAULT_DNS2;
@@ -113,8 +113,8 @@ public class VpnProfile implements Serializable, Cloneable {
     public boolean mUseDefaultRoute = true;
     public boolean mUsePull = true;
     public String mCustomRoutes;
-    public boolean mCheckRemoteCN = true;
-    public boolean mExpectTLSCert = false;
+    public final boolean mCheckRemoteCN = false;
+    public final boolean mExpectTLSCert = false;
     public String mRemoteCN = "";
     public String mPassword = "";
     public String mUsername = "";
@@ -186,8 +186,6 @@ public class VpnProfile implements Serializable, Cloneable {
         mUseLzo = false;
         mUseDefaultRoute = false;
         mUseDefaultRoutev6 = false;
-        mExpectTLSCert = false;
-        mCheckRemoteCN = false;
         mPersistTun = false;
         mAllowLocalLAN = true;
         mPushPeerInfo =false;
@@ -326,7 +324,6 @@ public class VpnProfile implements Serializable, Cloneable {
                 }
             }
         }
-
 
         switch (mAuthenticationType) {
             case VpnProfile.TYPE_USERPASS_CERTIFICATES:

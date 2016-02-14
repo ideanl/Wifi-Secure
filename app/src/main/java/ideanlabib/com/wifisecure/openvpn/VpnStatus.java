@@ -17,6 +17,7 @@ import android.os.Message;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -47,7 +48,7 @@ public class VpnStatus {
 
     private static String mLaststatemsg = "";
 
-    private static String mLaststate = "NOPROCESS";
+    public static String mLaststate = "NOPROCESS";
 
     private static int mLastStateresid = R.string.state_noprocess;
 
@@ -568,6 +569,9 @@ public class VpnStatus {
             Message m = mLogFileHandler.obtainMessage(LogFileHandler.LOG_MESSAGE, logItem);
             mLogFileHandler.sendMessage(m);
         }
+
+        if (logItem.mMessage != null && logItem.mMessage != "")
+            Log.d("Connector", logItem.mMessage);
 
         if (logbuffer.size() > MAXLOGENTRIES + MAXLOGENTRIES / 2) {
             while (logbuffer.size() > MAXLOGENTRIES)
