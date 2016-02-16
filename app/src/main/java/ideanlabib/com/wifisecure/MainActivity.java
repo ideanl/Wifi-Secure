@@ -1,5 +1,6 @@
 package ideanlabib.com.wifisecure;
 
+import android.accounts.AccountManager;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
 import android.content.Context;
@@ -17,6 +18,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.google.android.gms.auth.GoogleAuthUtil;
+import com.google.android.gms.common.AccountPicker;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -24,6 +28,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
 
 import ideanlabib.com.wifisecure.openvpn.DisconnectVPN;
@@ -60,8 +65,10 @@ public class MainActivity extends AppCompatActivity {
     private final String TUNNEL_HOST = "ideanvpn.tk";
 
     private int START_VPN_DIALOG = 1;
+    private final int REQUEST_CODE_EMAIL = 2;
 
     private Process stunnelProcess;
+    private String ipAddress = "";
 
     private Connector server;
 
@@ -76,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
 
         profile = getProfileManager().getProfileByName("IdeanVPN");
 
-        initializeApp();
+        getAccount();
 
         Intent intent = getIntent();
         if (intent != null && intent.getAction() == OpenVPNService.DISCONNECT_VPN) {
@@ -87,25 +94,6 @@ public class MainActivity extends AppCompatActivity {
                 throw new RuntimeException("Could not rebind to disconnect.");
             unsecure();
         }
-    }
-
-    private void initializeApp() {
-        if (profile == null)
-            createProfile();
-        else
-            secureButton.setEnabled(true);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (!(new File(getFilesDir().getAbsolutePath() + "/stunnel").exists())) {
-                    File stunnel = downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel", "stunnel");
-                    downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel.conf", "stunnel.conf");
-                    if (!stunnel.setExecutable(true))
-                        throw new RuntimeException("Could not set stunnel to executable");
-                }
-            }
-        }).start();
     }
 
     public void secure(View v) {
@@ -225,10 +213,20 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Log.d("Connector", "FAILURE!");
             }
+        } else if (requestCode == REQUEST_CODE_EMAIL && resultCode == RESULT_OK) {
+            String accountName = data.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
+            Log.d("STUFF", accountName);
+            initializeApp();
         }
     }
 
-    public void createProfile() {
+    private void getAccount() {
+        Intent intent = AccountPicker.newChooseAccountIntent(null, null,
+                new String[]{GoogleAuthUtil.GOOGLE_ACCOUNT_TYPE}, false, null, null, null, null);
+        startActivityForResult(intent, REQUEST_CODE_EMAIL);
+    }
+
+    private void initializeApp() {
         progress.setTitle("Initializing");
         progress.setMessage("Please wait...");
         progress.show();
@@ -239,54 +237,63 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    Log.d("Connector", "CREATING PROFILE....");
-                    //String client = getPhoneNumber();
-                    String client = "idean";
-                    if (!(new File(getFilesDir().getAbsolutePath() + "/ca.crt").exists())) {
-                        downloadFile(context, "http://ideanlabib.tk/files/openvpn/ca.crt", "ca.crt");
+                    if (!(new File(getFilesDir().getAbsolutePath() + "/stunnel").exists())) {
+                        File stunnel = downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel", "stunnel");
+                        if (!stunnel.setExecutable(true))
+                            throw new RuntimeException("Could not set stunnel to executable");
                     }
-                    String caFileContents = readFile("ca.crt");
 
-                    String keyname = client + ".key";
-                    if (!(new File(getFilesDir().getAbsolutePath() + "/" + keyname).exists())) {
-                        downloadFile(context, "http://ideanlabib.tk/files/openvpn/" + keyname, keyname);
+                    downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel.conf", "stunnel-template.conf");
+
+                    if (profile == null) {
+                        Log.d("Connector", "CREATING PROFILE....");
+                        //String client = getPhoneNumber();
+                        String client = "idean";
+                        if (!(new File(getFilesDir().getAbsolutePath() + "/ca.crt").exists())) {
+                            downloadFile(context, "http://ideanlabib.tk/files/openvpn/ca.crt", "ca.crt");
+                        }
+                        String caFileContents = readFile("ca.crt");
+
+                        String keyname = client + ".key";
+                        if (!(new File(getFilesDir().getAbsolutePath() + "/" + keyname).exists())) {
+                            downloadFile(context, "http://ideanlabib.tk/files/openvpn/" + keyname, keyname);
+                        }
+                        String clientKeyFileContents = readFile(keyname);
+
+                        String certname = client + ".crt";
+                        if (!(new File(getFilesDir().getAbsolutePath() + "/" + certname).exists())) {
+                            downloadFile(context, "http://ideanlabib.tk/files/openvpn/" + certname, certname);
+                        }
+                        String clientCertFileContents = readFile(certname);
+
+                        ProfileManager pm = getProfileManager();
+                        profile = new VpnProfile("IdeanVPN");
+                        profile.mUseLzo = true;
+                        //Certificate stuff
+                        //profile.mServerName = "67.183.127.61";
+                        profile.mServerName = "127.0.0.1";
+                        profile.mServerPort = "1144";
+
+                        profile.mUseUdp = false;
+                        profile.mConnectRetryMax = "5";
+                        profile.mConnectRetry = "5";
+                        profile.mUseDefaultRoute = true;
+                        profile.mUseDefaultRoutev6 = true;
+                        profile.mUsePull = true;
+                        profile.mPersistTun = true;
+
+                        profile.mConnections[0].mEnabled = true;
+                        profile.mConnections[0].mServerName = "127.0.0.1";
+                        profile.mConnections[0].mServerPort = "1144";
+                        profile.mConnections[0].mUseUdp = false;
+
+                        profile.mCaFilename = "[[NAME]]ca.crt[[INLINE]]" + caFileContents;
+                        profile.mClientKeyFilename = "[[NAME]]" + client + ".key[[INLINE]]" + clientKeyFileContents;
+                        profile.mClientCertFilename = "[[NAME]]" + client + ".cert[[INLINE]]" + clientCertFileContents;
+                        pm.addProfile(profile);
+                        pm.saveProfileList(context);
+                        pm.saveProfile(context, profile);
                     }
-                    String clientKeyFileContents = readFile(keyname);
-
-                    String certname = client + ".crt";
-                    if (!(new File(getFilesDir().getAbsolutePath() + "/" + certname).exists())) {
-                        downloadFile(context, "http://ideanlabib.tk/files/openvpn/" + certname, certname);
-                    }
-                    String clientCertFileContents = readFile(certname);
-
-                    ProfileManager pm = getProfileManager();
-                    profile = new VpnProfile("IdeanVPN");
-                    profile.mUseLzo = true;
-                    //Certificate stuff
-                    //profile.mServerName = "67.183.127.61";
-                    profile.mServerName = "127.0.0.1";
-                    profile.mServerPort = "1144";
-
-                    profile.mUseUdp = false;
-                    profile.mConnectRetryMax = "5";
-                    profile.mConnectRetry = "5";
-                    profile.mUseDefaultRoute = true;
-                    profile.mUseDefaultRoutev6 = true;
-                    profile.mUsePull = true;
-                    profile.mPersistTun = true;
-
-                    profile.mConnections[0].mEnabled = true;
-                    profile.mConnections[0].mServerName = "127.0.0.1";
-                    profile.mConnections[0].mServerPort = "1144";
-                    profile.mConnections[0].mUseUdp = false;
-
-                    profile.mCaFilename = "[[NAME]]ca.crt[[INLINE]]" + caFileContents;
-                    profile.mClientKeyFilename = "[[NAME]]" + client + ".key[[INLINE]]" + clientKeyFileContents;
-                    profile.mClientCertFilename = "[[NAME]]" + client + ".cert[[INLINE]]" + clientCertFileContents;
-                    pm.addProfile(profile);
-                    pm.saveProfileList(context);
-                    pm.saveProfile(context, profile);
-
                     Handler handler = new Handler(Looper.getMainLooper());
                     handler.post(new Runnable() {
                         @Override
@@ -368,12 +375,53 @@ public class MainActivity extends AppCompatActivity {
 
     private void startStunnel() {
         try {
+            makeStunnelConf();
+
             String path = getFilesDir().getAbsolutePath() + "/";
             String[] command = {path + "stunnel", path + "stunnel.conf"};
             ProcessBuilder p = new ProcessBuilder(command);
             stunnelProcess = p.start();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void makeStunnelConf() {
+        String content = readFile("stunnel-template.conf");
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    synchronized(ipAddress) {
+                        InetAddress address = InetAddress.getByName(new URL("http://ideanvpn.tk").getHost());
+                        ipAddress.notify();
+                        ipAddress = address.getHostAddress();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("FAILED TO GET IP");
+                }
+            }
+        }).start();
+
+        synchronized(ipAddress) {
+            try {
+                ipAddress.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                throw new RuntimeException("Darn. Got interrupted");
+            }
+
+            content = content.replaceAll("IP_GOES_HERE", ipAddress);
+
+            try {
+                FileOutputStream output = this.openFileOutput("stunnel.conf", Context.MODE_PRIVATE);
+                output.write(content.getBytes());
+                output.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
