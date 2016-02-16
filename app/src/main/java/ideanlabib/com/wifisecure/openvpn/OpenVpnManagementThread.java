@@ -620,6 +620,8 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
 
     @Override
     public boolean stopVPN() {
+        if (mOpenVPNService.stunnelProcess != null)
+            mOpenVPNService.stunnelProcess.destroy();
         return stopOpenVPN();
     }
 }

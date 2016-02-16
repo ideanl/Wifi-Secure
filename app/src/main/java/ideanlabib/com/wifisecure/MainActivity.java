@@ -15,6 +15,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -25,6 +26,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
+import ideanlabib.com.wifisecure.openvpn.DisconnectVPN;
 import ideanlabib.com.wifisecure.openvpn.OpenVPNService;
 import ideanlabib.com.wifisecure.openvpn.ProfileManager;
 import ideanlabib.com.wifisecure.openvpn.VPNLaunchHelper;
@@ -37,6 +39,20 @@ public class MainActivity extends AppCompatActivity {
 
     protected OpenVPNService mService;
 
+    View.OnClickListener secure = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            secure();
+        }
+    };
+
+    View.OnClickListener unsecure = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            unsecure();
+        }
+    };
+
     private VpnProfile profile;
 
     private final int   LISTEN_PORT = 11445,
@@ -45,6 +61,8 @@ public class MainActivity extends AppCompatActivity {
 
     private int START_VPN_DIALOG = 1;
 
+    private Process stunnelProcess;
+
     private Connector server;
 
     @Override
@@ -52,14 +70,42 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         secureButton = (Button) findViewById(R.id.secure);
         progress = new ProgressDialog(this);
 
         profile = getProfileManager().getProfileByName("IdeanVPN");
+
+        initializeApp();
+
+        Intent intent = getIntent();
+        if (intent != null && intent.getAction() == OpenVPNService.DISCONNECT_VPN) {
+            Intent bindIntent = new Intent(this, OpenVPNService.class);
+            bindIntent.setAction(OpenVPNService.START_SERVICE);
+            boolean result = bindService(bindIntent, connection, BIND_AUTO_CREATE);
+            if (!result)
+                throw new RuntimeException("Could not rebind to disconnect.");
+            unsecure();
+        }
+    }
+
+    private void initializeApp() {
         if (profile == null)
             createProfile();
         else
             secureButton.setEnabled(true);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (!(new File(getFilesDir().getAbsolutePath() + "/stunnel").exists())) {
+                    File stunnel = downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel", "stunnel");
+                    downloadFile(getApplicationContext(), "http://ideanlabib.tk/files/openvpn/stunnel/stunnel.conf", "stunnel.conf");
+                    if (!stunnel.setExecutable(true))
+                        throw new RuntimeException("Could not set stunnel to executable");
+                }
+            }
+        }).start();
     }
 
     public void secure(View v) {
@@ -68,23 +114,22 @@ public class MainActivity extends AppCompatActivity {
 
     public void secure() {
         secureButton.setEnabled(false);
-        /*server = new Connector(LISTEN_PORT, TUNNEL_HOST,
-                TUNNEL_PORT, this);
-        server.start();*/
+        progress.setTitle("Securing");
+        progress.setMessage("Please wait...");
+        progress.show();
+        startStunnel();
         startVPN();
     }
 
     public void unsecure() {
         secureButton.setEnabled(false);
-        if (server != null) {
-            try {
-                //close the server socket and interrupt the server thread
-                //server.ss.close();
-                //server.interrupt();
-                stopVPN();
-            } catch (Exception e) {
-                Log.d("Connector", "Interrupt failure: " + e.toString());
-            }
+        progress.setTitle("Closing.");
+        progress.setMessage("Please wait...");
+        progress.show();
+        try {
+            stopVPN();
+        } catch (Exception e) {
+            Log.d("Stuff", "Interrupt failure: " + e.toString());
         }
         Log.d("Connector", "Stopping tunnel " + LISTEN_PORT + ":" + TUNNEL_HOST + ":" + TUNNEL_PORT);
 
@@ -92,28 +137,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void update(boolean secured) {
-        Button button = ((Button) findViewById(R.id.secure));
+        secureButton.setEnabled(true);
+        progress.dismiss();
         if (secured) {
-            button.setText("Unsecure Me");
+            secureButton.setText("Unsecure Me");
 
-            button.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    unsecure();
-                }
-            });
+            secureButton.setOnClickListener(unsecure);
         } else {
-            button.setText("Secure Me!");
+            secureButton.setText("Secure Me!");
 
-            button.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    secure();
-                }
-            });
+            secureButton.setOnClickListener(secure);
         }
-
-        button.setEnabled(true);
     }
 
 
@@ -124,25 +158,43 @@ public class MainActivity extends AppCompatActivity {
         else
             onActivityResult(START_VPN_DIALOG, RESULT_OK, intent);
 
-        Thread thread = new Thread(new Runnable() {
+        new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    while (VpnStatus.mLaststate != "CONNECTED") {
+                    while (VpnStatus.mLaststate.equals("NOPROCESS"))
+                        Thread.sleep(500);
+
+                    while (!VpnStatus.mLaststate.equals("CONNECTED") && !VpnStatus.mLaststate.equals("NOPROCESS")) {
                         Thread.sleep(500);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
 
-                update(true);
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (VpnStatus.mLaststate.equals("NOPROCESS")) {
+                            progress.dismiss();
+                            secureButton.setEnabled(true);
+                            stopService(new Intent(mService, OpenVPNService.class));
+                            Toast toast = Toast.makeText(getApplicationContext(), "Could not secure connection. Are you connected to the internet?", Toast.LENGTH_LONG);
+                            toast.show();
+                        } else {
+                            update(true);
+                        }
+                    }
+                });
             }
-        });
+        }).start();
     }
 
     private void stopVPN() {
         try {
             mService.getManagement().stopVPN();
+            Intent intent = new Intent(this, DisconnectVPN.class);
+            startActivityForResult(intent, 0);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -162,8 +214,14 @@ public class MainActivity extends AppCompatActivity {
                 }
                 Log.d("Connector", "SUCCESS!");
                 Intent intent = new Intent(this, OpenVPNService.class);
-                bindService(intent, connection, Context.BIND_AUTO_CREATE);
                 startService(intent);
+
+                intent = new Intent(this, OpenVPNService.class);
+                intent.setAction(OpenVPNService.START_SERVICE);
+
+                boolean result = bindService(intent, connection, Context.BIND_AUTO_CREATE);
+                if (!result)
+                    throw new RuntimeException("Unable to bind with service.");
             } else {
                 Log.d("Connector", "FAILURE!");
             }
@@ -218,7 +276,7 @@ public class MainActivity extends AppCompatActivity {
                     profile.mPersistTun = true;
 
                     profile.mConnections[0].mEnabled = true;
-                    profile.mConnections[0].mServerName = "67.183.127.61";
+                    profile.mConnections[0].mServerName = "127.0.0.1";
                     profile.mConnections[0].mServerPort = "1144";
                     profile.mConnections[0].mUseUdp = false;
 
@@ -254,20 +312,6 @@ public class MainActivity extends AppCompatActivity {
         return tMgr.getLine1Number();
     }
 
-    private ServiceConnection connection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName className,
-                                       IBinder service) {
-            OpenVPNService.LocalBinder binder = (OpenVPNService.LocalBinder) service;
-            mService = binder.getService();
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            Log.d("Connector", "DISCONNECTED!");
-        }
-    };
-
     private String readFile(String name) {
         try {
             FileInputStream fis = openFileInput(name);
@@ -290,7 +334,7 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    private void downloadFile(final Context context, final String url, final String filename) {
+    private File downloadFile(final Context context, final String url, final String filename) {
         try {
             URL website = new URL(url);
             HttpURLConnection connection = (HttpURLConnection) website.openConnection();
@@ -307,8 +351,45 @@ public class MainActivity extends AppCompatActivity {
             while ((count = input.read(data)) != -1) {
                 output.write(data, 0, count);
             }
+            output.close();
+
+            return new File(getFilesDir().getAbsolutePath() + "/" + filename);
         } catch (Exception e) {
             e.printStackTrace();
         }
+        return null;
     }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        unbindService(connection);
+    }
+
+    private void startStunnel() {
+        try {
+            String path = getFilesDir().getAbsolutePath() + "/";
+            String[] command = {path + "stunnel", path + "stunnel.conf"};
+            ProcessBuilder p = new ProcessBuilder(command);
+            stunnelProcess = p.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName className,
+                                       IBinder service) {
+            OpenVPNService.LocalBinder binder = (OpenVPNService.LocalBinder) service;
+            mService = binder.getService();
+            mService.stunnelProcess = stunnelProcess;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.d("Connector", "DISCONNECTED!");
+            mService = null;
+        }
+    };
 }

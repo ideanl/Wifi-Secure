@@ -52,12 +52,13 @@ import static ideanlabib.com.wifisecure.openvpn.VpnStatus.ConnectionStatus.LEVEL
 import static ideanlabib.com.wifisecure.openvpn.VpnStatus.ConnectionStatus.LEVEL_WAITING_FOR_USER_INPUT;
 
 public class OpenVPNService extends VpnService implements VpnStatus.StateListener, Callback, VpnStatus.ByteCountListener {
-    public static final String START_SERVICE = "de.blinkt.openvpn.START_SERVICE";
-    public static final String START_SERVICE_STICKY = "de.blinkt.openvpn.START_SERVICE_STICKY";
-    public static final String ALWAYS_SHOW_NOTIFICATION = "de.blinkt.openvpn.NOTIFICATION_ALWAYS_VISIBLE";
-    public static final String DISCONNECT_VPN = "de.blinkt.openvpn.DISCONNECT_VPN";
-    private static final String PAUSE_VPN = "de.blinkt.openvpn.PAUSE_VPN";
-    private static final String RESUME_VPN = "de.blinkt.openvpn.RESUME_VPN";
+    public static final String START_SERVICE = "ideanlabib.com.wifisecure.START_SERVICE";
+    public static final String START_SERVICE_STICKY = "ideanlabib.com.wifisecure.START_SERVICE_STICKY";
+    public static final String ALWAYS_SHOW_NOTIFICATION = "ideanlabib.com.wifisecure.NOTIFICATION_ALWAYS_VISIBLE";
+    public static final String DISCONNECT_VPN = "ideanlabib.com.wifisecure.DISCONNECT_VPN";
+    private static final String PAUSE_VPN = "ideanlabib.com.wifisecure.PAUSE_VPN";
+    private static final String RESUME_VPN = "ideanlabib.com.wifisecure.RESUME_VPN";
+    public static final String STUNNEL_PID = "ideanlabib.com.wifisecure.STUNNEL_PID";
     private static final int OPENVPN_STATUS = 1;
     private static boolean mNotificationAlwaysVisible = false;
     private final Vector<String> mDnslist = new Vector<>();
@@ -81,6 +82,7 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
     private final Object mProcessLock = new Object();
     private Handler guiHandler;
     private Toast mlastToast;
+    public Process stunnelProcess;
 
     // From: http://stackoverflow.com/questions/3758606/how-to-convert-byte-size-into-human-readable-format-in-java
     public static String humanReadableByteCount(long bytes, boolean mbit) {
@@ -136,69 +138,57 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
         }
     }
 
-    private void showNotification(final String msg, String tickerText, boolean lowpriority, long when, VpnStatus.ConnectionStatus status) {
-        String ns = Context.NOTIFICATION_SERVICE;
-        NotificationManager mNotificationManager = (NotificationManager) getSystemService(ns);
+    private void showNotification(boolean lowpriority, long when, VpnStatus.ConnectionStatus status) {
+        if (mProfile != null) {
+            String ns = Context.NOTIFICATION_SERVICE;
+            NotificationManager mNotificationManager = (NotificationManager) getSystemService(ns);
+
+            int icon = getIconByConnectionStatus(status);
+
+            android.app.Notification.Builder nbuilder = new Notification.Builder(this);
+
+            if (status == LEVEL_CONNECTED)
+                nbuilder.setContentTitle("WiFi Hacker ON and CONNECTED");
+            else
+                nbuilder.setContentTitle("WiFi Hacker ON");
+
+            nbuilder.setContentText("Touch to turn off.");
+
+            Intent intent = new Intent(this, DisconnectVPN.class);
+            intent.putExtra(DisconnectVPN.IS_ACTIVITY, false);
+            PendingIntent disconnectPendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+            nbuilder.setContentIntent(disconnectPendingIntent);
+
+            nbuilder.setOnlyAlertOnce(true);
+            nbuilder.setOngoing(true);
+            //nbuilder.setContentIntent(getLogPendingIntent());
+            nbuilder.setSmallIcon(icon);
 
 
-        int icon = getIconByConnectionStatus(status);
-
-        android.app.Notification.Builder nbuilder = new Notification.Builder(this);
-
-        if (mProfile != null)
-            nbuilder.setContentTitle(getString(R.string.notifcation_title, mProfile.mName));
-        else
-            nbuilder.setContentTitle(getString(R.string.notifcation_title_notconnect));
-
-        nbuilder.setContentText(msg);
-        nbuilder.setOnlyAlertOnce(true);
-        nbuilder.setOngoing(true);
-        //nbuilder.setContentIntent(getLogPendingIntent());
-        nbuilder.setSmallIcon(icon);
+            if (when != 0)
+                nbuilder.setWhen(when);
 
 
-        if (when != 0)
-            nbuilder.setWhen(when);
+            // Try to set the priority available since API 16 (Jellybean)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)
+                jbNotificationExtras(lowpriority, nbuilder);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+                lpNotificationExtras(nbuilder);
+
+            @SuppressWarnings("deprecation")
+            Notification notification = nbuilder.getNotification();
 
 
-        // Try to set the priority available since API 16 (Jellybean)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)
-            jbNotificationExtras(lowpriority, nbuilder);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-            lpNotificationExtras(nbuilder);
-
-        if (tickerText != null && !tickerText.equals(""))
-            nbuilder.setTicker(tickerText);
-
-        @SuppressWarnings("deprecation")
-        Notification notification = nbuilder.getNotification();
-
-
-        mNotificationManager.notify(OPENVPN_STATUS, notification);
-        startForeground(OPENVPN_STATUS, notification);
-
-        // Check if running on a TV
-        if(runningOnAndroidTV() && !lowpriority)
-            guiHandler.post(new Runnable() {
-
-                @Override
-                public void run() {
-
-                    if (mlastToast!=null)
-                        mlastToast.cancel();
-                    String toastText = String.format(Locale.getDefault(), "%s - %s", mProfile.mName, msg);
-                    mlastToast = Toast.makeText(getBaseContext(), toastText, Toast.LENGTH_SHORT);
-                    mlastToast.show();
-                }
-            });
+            mNotificationManager.notify(OPENVPN_STATUS, notification);
+            startForeground(OPENVPN_STATUS, notification);
+        }
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void lpNotificationExtras(Notification.Builder nbuilder) {
         nbuilder.setCategory(Notification.CATEGORY_SERVICE);
         nbuilder.setLocalOnly(true);
-
     }
 
     private boolean runningOnAndroidTV() {
@@ -241,28 +231,6 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
                 setUsesChronometer.invoke(nbuilder, true);
 
             }
-
-            Intent disconnectVPN = new Intent(this, DisconnectVPN.class);
-            disconnectVPN.setAction(DISCONNECT_VPN);
-            PendingIntent disconnectPendingIntent = PendingIntent.getActivity(this, 0, disconnectVPN, 0);
-
-            nbuilder.addAction(R.drawable.ic_menu_close_clear_cancel,
-                    getString(R.string.cancel_connection), disconnectPendingIntent);
-
-            Intent pauseVPN = new Intent(this, OpenVPNService.class);
-            if (mDeviceStateReceiver == null || !mDeviceStateReceiver.isUserPaused()) {
-                pauseVPN.setAction(PAUSE_VPN);
-                PendingIntent pauseVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
-                nbuilder.addAction(R.drawable.ic_menu_pause,
-                        getString(R.string.pauseVPN), pauseVPNPending);
-
-            } else {
-                pauseVPN.setAction(RESUME_VPN);
-                PendingIntent resumeVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
-                nbuilder.addAction(R.drawable.ic_menu_play,
-                        getString(R.string.resumevpn), resumeVPNPending);
-            }
-
 
             //ignore exception
         } catch (NoSuchMethodException | IllegalArgumentException |
@@ -383,8 +351,7 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
 
         String startTitle = getString(R.string.start_vpn_title, mProfile.mName);
         String startTicker = getString(R.string.start_vpn_ticker, mProfile.mName);
-        showNotification(startTitle, startTicker,
-                false, 0, LEVEL_CONNECTING_NO_SERVER_REPLY_YET);
+        showNotification(false, 0, LEVEL_CONNECTING_NO_SERVER_REPLY_YET);
 
         // Set a flag that we are starting a new VPN
         mStarting = true;
@@ -902,8 +869,7 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
             // CONNECTED
             // Does not work :(
             String msg = getString(resid);
-            showNotification(VpnStatus.getLastCleanLogMessage(this),
-                    msg, lowpriority, 0, level);
+            showNotification(lowpriority, 0, level);
 
         }
     }
@@ -925,8 +891,8 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
                     humanReadableByteCount(out, false),
                     humanReadableByteCount(diffOut / OpenVPNManagement.mBytecountInterval, true));
 
-            boolean lowpriority = !mNotificationAlwaysVisible;
-            showNotification(netstat, null, lowpriority, mConnecttime, LEVEL_CONNECTED);
+            boolean lowpriority = false;
+            showNotification(lowpriority, mConnecttime, LEVEL_CONNECTED);
         }
 
     }
