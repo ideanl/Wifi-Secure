@@ -15,4 +15,15 @@
         android:layout_centerHorizontal="true"
         android:textSize="@dimen/abc_text_size_large_material"
         android:onClick="secure" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="invisible"
+        android:id="@+id/invite"
+        android:textSize="16sp"
+        android:text="Invite User"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentBottom="true"
+        android:onClick="inviteAlert" />
 </RelativeLayout>

@@ -27,10 +27,11 @@ public class DisconnectVPN extends Activity {
             OpenVPNService.LocalBinder binder = (OpenVPNService.LocalBinder) service;
             mService = binder.getService();
             mService.getManagement().stopVPN();
+            stopService(new Intent(mService, OpenVPNService.class));
+            unbindService(this);
             if (isOnActivity) {
                 finish();
             } else {
-                stopService(new Intent(mService, OpenVPNService.class));
                 System.exit(0);
             }
         }
