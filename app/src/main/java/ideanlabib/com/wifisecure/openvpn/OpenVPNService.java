@@ -319,7 +319,7 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
         }
 
         ProfileManager profileManager = ProfileManager.getInstance(this);
-        mProfile = profileManager.getProfileByName("IdeanVPN");
+        mProfile = profileManager.getProfileByName("WifiSecure");
 
         /* The intent is null when the service has been restarted */
         if (intent == null) {

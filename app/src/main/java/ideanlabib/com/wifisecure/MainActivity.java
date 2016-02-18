@@ -73,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final int   LISTEN_PORT = 11445,
                         TUNNEL_PORT = 443;
-    private final String TUNNEL_HOST = "ideanvpn.tk";
+    private final String TUNNEL_HOST = "wifisecure.tk";
 
     private int START_VPN_DIALOG = 1;
     private final int REQUEST_CODE_EMAIL = 2;
@@ -97,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
         inviteButton = (Button) findViewById(R.id.invite);
         progress = new ProgressDialog(this);
 
-        profile = getProfileManager().getProfileByName("IdeanVPN");
+        profile = getProfileManager().getProfileByName("WifiSecure");
 
         getAccount();
 
@@ -308,7 +308,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    InetAddress address = InetAddress.getByName(new URL("http://ideanvpn.tk").getHost());
+                    InetAddress address = InetAddress.getByName(new URL("http://wifisecure.tk").getHost());
                     ipAddress = address.getHostAddress();
 
                     if (!(new File(getFilesDir().getAbsolutePath() + "/stunnel").exists())) {
@@ -362,7 +362,7 @@ public class MainActivity extends AppCompatActivity {
                             String clientCertFileContents = readFile(certname);
 
                             ProfileManager pm = getProfileManager();
-                            profile = new VpnProfile("IdeanVPN");
+                            profile = new VpnProfile("WifiSecure");
                             profile.mUseLzo = true;
                             profile.mServerName = "127.0.0.1";
                             profile.mServerPort = "1144";
@@ -531,7 +531,7 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 try {
                     synchronized(ipAddress) {
-                        InetAddress address = InetAddress.getByName(new URL("http://ideanvpn.tk").getHost());
+                        InetAddress address = InetAddress.getByName(new URL("http://wifisecure.tk").getHost());
                         ipAddress.notify();
                         ipAddress = address.getHostAddress();
                     }
