@@ -328,7 +328,6 @@ public class OpenVPNService extends VpnService implements VpnStatus.StateListene
 
             /* Got no profile, just stop */
             if (mProfile == null) {
-                Log.d("OpenVPN", "Got no last connected profile on null intent. Stopping");
                 stopSelf(startId);
                 return START_NOT_STICKY;
             }

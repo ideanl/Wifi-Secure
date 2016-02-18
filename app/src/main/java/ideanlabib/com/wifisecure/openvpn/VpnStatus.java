@@ -570,9 +570,6 @@ public class VpnStatus {
             mLogFileHandler.sendMessage(m);
         }
 
-        if (logItem.mMessage != null && logItem.mMessage != "")
-            Log.d("Connector", logItem.mMessage);
-
         if (logbuffer.size() > MAXLOGENTRIES + MAXLOGENTRIES / 2) {
             while (logbuffer.size() > MAXLOGENTRIES)
                 logbuffer.removeFirst();

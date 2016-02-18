@@ -173,9 +173,6 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
         } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException | IllegalAccessException | NullPointerException e) {
             VpnStatus.logException("Failed to retrieve fd from socket (" + fd + ")", e);
         }
-
-        Log.d("Openvpn", "Failed to retrieve fd from socket: " + fd);
-
     }
 
     private String processInput(String pendingInput) {
@@ -263,8 +260,6 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
           D -- debug, and
                  */
         // 2 log message
-
-        Log.d("OpenVPN", argument);
 
         VpnStatus.LogLevel level;
         switch (args[1]) {

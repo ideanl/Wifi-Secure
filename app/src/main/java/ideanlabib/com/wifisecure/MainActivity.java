@@ -82,7 +82,6 @@ public class MainActivity extends AppCompatActivity {
     private String ipAddress = "";
     private String serial;
 
-    private Connector server;
     private String accountName;
     private boolean isReady = true;
     private boolean binded = false;
@@ -173,9 +172,8 @@ public class MainActivity extends AppCompatActivity {
         try {
             stopVPN();
         } catch (Exception e) {
-            Log.d("Stuff", "Interrupt failure: " + e.toString());
+            e.printStackTrace();
         }
-        Log.d("Connector", "Stopping tunnel " + LISTEN_PORT + ":" + TUNNEL_HOST + ":" + TUNNEL_PORT);
 
         update(false);
     }
@@ -260,7 +258,6 @@ public class MainActivity extends AppCompatActivity {
                 } catch (IOException e) {
                     VpnStatus.logException(e);
                 }
-                Log.d("Connector", "SUCCESS!");
                 Intent intent = new Intent(this, OpenVPNService.class);
                 startService(intent);
 
@@ -271,7 +268,6 @@ public class MainActivity extends AppCompatActivity {
                 if (!result)
                     throw new RuntimeException("Unable to bind with service.");
             } else {
-                Log.d("Connector", "FAILURE!");
             }
         } else if (requestCode == REQUEST_CODE_EMAIL && resultCode == RESULT_OK) {
             accountName = data.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
@@ -317,76 +313,85 @@ public class MainActivity extends AppCompatActivity {
                             throw new RuntimeException("Could not set stunnel to executable");
                     }
 
-                    downloadFile(getApplicationContext(), "http://" + ipAddress + "/vpnapi/stunnel/stunnel.conf", "stunnel-template.conf");
+                    if (downloadFile(getApplicationContext(), "http://" + ipAddress + "/vpnapi/stunnel/stunnel.conf", "stunnel-template.conf") == null) {
+                        isReady = false;
 
-                    if (profile == null) {
-                        Log.d("Connector", "CREATING PROFILE....");
-                        String out = postGetLink();
-                        JSONObject data = new JSONObject(out);
-                        String success = data.getString("success");
-                        final String message = data.getString("message");
+                        new Handler(Looper.getMainLooper()).post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast toast = Toast.makeText(context, "Can not connect.", Toast.LENGTH_SHORT);
+                                toast.show();
+                            }
+                        });
+                    } else {
+                        if (profile == null) {
+                            String out = postGetLink();
+                            JSONObject data = new JSONObject(out);
+                            String success = data.getString("success");
+                            final String message = data.getString("message");
 
-                        if (!(success.equals("true"))) {
-                            isReady = false;
-                            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    final Toast toast = Toast.makeText(context, message, Toast.LENGTH_LONG);
-                                    toast.show();
+                            if (!(success.equals("true"))) {
+                                isReady = false;
+                                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        final Toast toast = Toast.makeText(context, message, Toast.LENGTH_LONG);
+                                        toast.show();
+                                    }
+                                });
+                            } else {
+                                isReady = true;
+                                while ((new JSONObject(postGetLink())).getString("available").equals("false"))
+                                    Thread.sleep(200);
+
+                                serial = getDeviceID();
+                                String params  = "serial="+serial+"&email="+accountName+"&file=";
+                                String client = serial;
+                                if (!(new File(getFilesDir().getAbsolutePath() + "/ca.crt").exists())) {
+                                    downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", "ca.crt", params + "ca.crt");
                                 }
-                            });
-                        } else {
-                            isReady = true;
-                            while ((new JSONObject(postGetLink())).getString("available").equals("false"))
-                                Thread.sleep(200);
+                                String caFileContents = readFile("ca.crt");
 
-                            serial = getDeviceID();
-                            String params  = "serial="+serial+"&email="+accountName+"&file=";
-                            String client = serial;
-                            if (!(new File(getFilesDir().getAbsolutePath() + "/ca.crt").exists())) {
-                                downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", "ca.crt", params + "ca.crt");
+                                String keyname = client + ".key";
+                                if (!(new File(getFilesDir().getAbsolutePath() + "/" + keyname).exists())) {
+                                    downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", keyname, params + keyname);
+                                }
+                                String clientKeyFileContents = readFile(keyname);
+
+                                Thread.sleep(1000);
+                                String certname = client + ".crt";
+                                if (!(new File(getFilesDir().getAbsolutePath() + "/" + certname).exists())) {
+                                    downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", certname, params + certname);
+                                }
+                                String clientCertFileContents = readFile(certname);
+
+                                ProfileManager pm = getProfileManager();
+                                profile = new VpnProfile("WifiSecure");
+                                profile.mUseLzo = true;
+                                profile.mServerName = "127.0.0.1";
+                                profile.mServerPort = "1144";
+
+                                profile.mUseUdp = false;
+                                profile.mConnectRetryMax = "5";
+                                profile.mConnectRetry = "5";
+                                profile.mUseDefaultRoute = true;
+                                profile.mUseDefaultRoutev6 = true;
+                                profile.mUsePull = true;
+                                profile.mPersistTun = true;
+
+                                profile.mConnections[0].mEnabled = true;
+                                profile.mConnections[0].mServerName = "127.0.0.1";
+                                profile.mConnections[0].mServerPort = "1144";
+                                profile.mConnections[0].mUseUdp = false;
+
+                                profile.mCaFilename = "[[NAME]]ca.crt[[INLINE]]" + caFileContents;
+                                profile.mClientKeyFilename = "[[NAME]]" + client + ".key[[INLINE]]" + clientKeyFileContents;
+                                profile.mClientCertFilename = "[[NAME]]" + client + ".cert[[INLINE]]" + clientCertFileContents;
+
+                                pm.addProfile(profile);
+                                pm.saveProfileList(context);
+                                pm.saveProfile(context, profile);
                             }
-                            String caFileContents = readFile("ca.crt");
-
-                            String keyname = client + ".key";
-                            if (!(new File(getFilesDir().getAbsolutePath() + "/" + keyname).exists())) {
-                                downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", keyname, params + keyname);
-                            }
-                            String clientKeyFileContents = readFile(keyname);
-
-                            Thread.sleep(1000);
-                            String certname = client + ".crt";
-                            if (!(new File(getFilesDir().getAbsolutePath() + "/" + certname).exists())) {
-                                downloadFilePost(context, "http://" + ipAddress + "/vpnapi/download.php", certname, params + certname);
-                            }
-                            String clientCertFileContents = readFile(certname);
-
-                            ProfileManager pm = getProfileManager();
-                            profile = new VpnProfile("WifiSecure");
-                            profile.mUseLzo = true;
-                            profile.mServerName = "127.0.0.1";
-                            profile.mServerPort = "1144";
-
-                            profile.mUseUdp = false;
-                            profile.mConnectRetryMax = "5";
-                            profile.mConnectRetry = "5";
-                            profile.mUseDefaultRoute = true;
-                            profile.mUseDefaultRoutev6 = true;
-                            profile.mUsePull = true;
-                            profile.mPersistTun = true;
-
-                            profile.mConnections[0].mEnabled = true;
-                            profile.mConnections[0].mServerName = "127.0.0.1";
-                            profile.mConnections[0].mServerPort = "1144";
-                            profile.mConnections[0].mUseUdp = false;
-
-                            profile.mCaFilename = "[[NAME]]ca.crt[[INLINE]]" + caFileContents;
-                            profile.mClientKeyFilename = "[[NAME]]" + client + ".key[[INLINE]]" + clientKeyFileContents;
-                            profile.mClientCertFilename = "[[NAME]]" + client + ".cert[[INLINE]]" + clientCertFileContents;
-
-                            pm.addProfile(profile);
-                            pm.saveProfileList(context);
-                            pm.saveProfile(context, profile);
                         }
                     }
                     Handler handler = new Handler(Looper.getMainLooper());
@@ -447,10 +452,6 @@ public class MainActivity extends AppCompatActivity {
         try {
             URL website = new URL(url);
             HttpURLConnection connection = (HttpURLConnection) website.openConnection();
-            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                Log.d("Connector", "Server returned HTTP " + connection.getResponseCode()
-                        + " " + connection.getResponseMessage());
-            }
 
             InputStream input = connection.getInputStream();
             FileOutputStream output = context.openFileOutput(filename, Context.MODE_PRIVATE);
@@ -625,7 +626,6 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            Log.d("Connector", "DISCONNECTED!");
             mService = null;
             binded = false;
         }
