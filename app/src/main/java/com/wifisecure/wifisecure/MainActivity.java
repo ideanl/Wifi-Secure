@@ -47,7 +47,7 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -98,7 +98,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        checkPermissions();
+        if (android.os.Build.VERSION.SDK_INT >= 23)
+            checkPermissions();
+        else
+            granted = true;
 
         final Context context = this;
 
@@ -484,7 +487,7 @@ public class MainActivity extends AppCompatActivity {
 
     private File downloadFilePost(final Context context, final String request, final String filename, String params) {
         try {
-            byte[] postData = params.getBytes(StandardCharsets.UTF_8);
+            byte[] postData = params.getBytes(Charset.forName("UTF-8"));
             int postDataLength = postData.length;
             URL url = new URL(request);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -495,9 +498,13 @@ public class MainActivity extends AppCompatActivity {
             conn.setRequestProperty("charset", "utf-8");
             conn.setRequestProperty("Content-Length", Integer.toString(postDataLength));
             conn.setUseCaches(false);
-            try (DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+            DataOutputStream wr = new DataOutputStream(conn.getOutputStream());
+            try {
                 wr.write(postData);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
+            wr.close();
             InputStream input = conn.getInputStream();
             FileOutputStream output = context.openFileOutput(filename, Context.MODE_PRIVATE);
 
@@ -591,7 +598,7 @@ public class MainActivity extends AppCompatActivity {
             String urlParameters = "serial=" + serial + "&email=" + accountName;
             if (phone != null) urlParameters += "&phone=" + phone;
 
-            byte[] postData = urlParameters.getBytes(StandardCharsets.UTF_8);
+            byte[] postData = urlParameters.getBytes(Charset.forName("UTF-8"));
             int postDataLength = postData.length;
             String request = "http://" + ipAddress + "/vpnapi/getlinks.php";
             URL url = new URL(request);
@@ -603,9 +610,13 @@ public class MainActivity extends AppCompatActivity {
             conn.setRequestProperty("charset", "utf-8");
             conn.setRequestProperty("Content-Length", Integer.toString(postDataLength));
             conn.setUseCaches(false);
-            try (DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+            DataOutputStream wr = new DataOutputStream(conn.getOutputStream());
+            try {
                 wr.write(postData);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
+            wr.close();
             InputStream input = conn.getInputStream();
             StringBuilder out = new StringBuilder();
             byte[] buffer = new byte[10240];
@@ -719,12 +730,12 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     try {
-                        String charset = StandardCharsets.UTF_8.name();
+                        String charset = Charset.forName("UTF-8").name();
                         String parameters = String.format("serial=%s&email=%s&invited=%s",
                                 URLEncoder.encode(serial, charset),
                                 URLEncoder.encode(accountName, charset),
                                 URLEncoder.encode(invited, charset));
-                        byte[] postData = parameters.getBytes(StandardCharsets.UTF_8);
+                        byte[] postData = parameters.getBytes(Charset.forName("UTF-8"));
                         int postDataLength = postData.length;
                         String request = "http://" + ipAddress + "/vpnapi/invite.php";
                         URL url = new URL(request);
@@ -736,11 +747,13 @@ public class MainActivity extends AppCompatActivity {
                         conn.setRequestProperty("charset", "utf-8");
                         conn.setRequestProperty("Content-Length", Integer.toString(postDataLength));
                         conn.setUseCaches(false);
-                        try (DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+                        DataOutputStream wr = new DataOutputStream(conn.getOutputStream());
+                        try {
                             wr.write(postData);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                        wr.close();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
