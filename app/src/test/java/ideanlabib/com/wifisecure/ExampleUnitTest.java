@@ -1,4 +1,4 @@
-package ideanlabib.com.wifisecure;
+package com.wifisecure.wifisecure;
 
 import org.junit.Test;
 

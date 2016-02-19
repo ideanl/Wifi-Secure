@@ -17,7 +17,7 @@
 
 
 extern "C" {
-jbyteArray Java_ideanlabib_com_wifisecure_openvpn_NativeUtils_rsasign(JNIEnv* env, jclass, jbyteArray from, jint pkeyRef);
+jbyteArray Java_com_wifisecure_wifisecure_openvpn_NativeUtils_rsasign(JNIEnv* env, jclass, jbyteArray from, jint pkeyRef);
 }
 
 int jniThrowException(JNIEnv* env, const char* className, const char* msg) {
@@ -41,7 +41,7 @@ int jniThrowException(JNIEnv* env, const char* className, const char* msg) {
 }
 
 static char opensslerr[1024];
-jbyteArray Java_ideanlabib_com_wifisecure_openvpn_NativeUtils_rsasign (JNIEnv* env, jclass, jbyteArray from, jint pkeyRef) {
+jbyteArray Java_com_wifisecure_wifisecure_openvpn_NativeUtils_rsasign (JNIEnv* env, jclass, jbyteArray from, jint pkeyRef) {
 
 	//	EVP_MD_CTX* ctx = reinterpret_cast<EVP_MD_CTX*>(ctxRef);
 	EVP_PKEY* pkey = reinterpret_cast<EVP_PKEY*>(pkeyRef);

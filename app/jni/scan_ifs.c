@@ -14,7 +14,7 @@
 
 #include "jniglue.h"
 
-jobjectArray Java_ideanlabib_com_wifisecure_openvpn_NativeUtils_getIfconfig(JNIEnv* env)
+jobjectArray Java_com_wifisecure_wifisecure_openvpn_NativeUtils_getIfconfig(JNIEnv* env)
 {
 
 	int sd;
