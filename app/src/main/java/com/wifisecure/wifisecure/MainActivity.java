@@ -1,6 +1,7 @@
 package com.wifisecure.wifisecure;
 
 import android.accounts.AccountManager;
+import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
 import android.content.Context;
@@ -28,6 +29,8 @@ import android.widget.Toast;
 
 import com.google.android.gms.auth.GoogleAuthUtil;
 import com.google.android.gms.common.AccountPicker;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.wifisecure.wifisecure.openvpn.DisconnectVPN;
 import com.wifisecure.wifisecure.openvpn.OpenVPNService;
 import com.wifisecure.wifisecure.openvpn.ProfileManager;
@@ -37,12 +40,14 @@ import com.wifisecure.wifisecure.openvpn.VpnStatus;
 
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
@@ -81,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
 
     private int START_VPN_DIALOG = 1;
     private final int REQUEST_CODE_EMAIL = 2;
+    private final int PLAY_SERVICES_ERROR = 3;
 
     private boolean granted = false;
 
@@ -318,9 +324,16 @@ public class MainActivity extends AppCompatActivity {
             accountName = readFile("email.saved");
             initializeApp();
         } else {
-            Intent intent = AccountPicker.newChooseAccountIntent(null, null,
-                    new String[]{GoogleAuthUtil.GOOGLE_ACCOUNT_TYPE}, false, null, null, null, null);
-            startActivityForResult(intent, REQUEST_CODE_EMAIL);
+            GoogleApiAvailability availability = GoogleApiAvailability.getInstance();
+            int playAvailable = availability.isGooglePlayServicesAvailable(this);
+            if (playAvailable == ConnectionResult.SUCCESS) {
+                Intent intent = AccountPicker.newChooseAccountIntent(null, null,
+                        new String[]{GoogleAuthUtil.GOOGLE_ACCOUNT_TYPE}, false, null, null, null, null);
+                startActivityForResult(intent, REQUEST_CODE_EMAIL);
+            } else {
+                Dialog dialog = availability.getErrorDialog(this, playAvailable, PLAY_SERVICES_ERROR);
+                dialog.show();
+            }
         }
     }
 
@@ -504,6 +517,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            wr.flush();
             wr.close();
             InputStream input = conn.getInputStream();
             FileOutputStream output = context.openFileOutput(filename, Context.MODE_PRIVATE);
@@ -616,6 +630,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            wr.flush();
             wr.close();
             InputStream input = conn.getInputStream();
             StringBuilder out = new StringBuilder();
@@ -753,7 +768,11 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                        wr.flush();
                         wr.close();
+
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        br.close();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
