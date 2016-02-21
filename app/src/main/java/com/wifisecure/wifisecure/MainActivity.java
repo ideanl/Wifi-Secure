@@ -192,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
                     startStunnel();
                     startVPN();
                 } else {
-                    Toast toast = Toast.makeText(this, "Service is not currently on. Please try again between 6am and 4PM", Toast.LENGTH_LONG);
+                    Toast toast = Toast.makeText(this, "Service is not currently on. Please try again between 6AM and 4PM, Monday-Friday", Toast.LENGTH_LONG);
                     toast.show();
                 }
             } catch (Exception e) {
